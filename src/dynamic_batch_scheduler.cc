@@ -221,8 +221,9 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     }
     // If not using dynamic batching, directly enqueue the
     // request to model for execution
+    const auto& instances = model_->Instances();
     auto payload = model_->Server()->GetRateLimiter()->GetPayload(
-        Payload::Operation::INFER_RUN, nullptr /* TritonModelInstance*/);
+        Payload::Operation::INFER_RUN, instances[0].get() /* TritonModelInstance*/);
     payload->AddRequest(std::move(request));
     RETURN_IF_ERROR(
         model_->Server()->GetRateLimiter()->EnqueuePayload(model_, payload));
