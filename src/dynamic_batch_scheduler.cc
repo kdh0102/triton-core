@@ -309,7 +309,7 @@ DynamicBatchScheduler::MonitoringThread() {
     gpu_temperatures_.emplace_back(0);
   }
 
-  const char *prom_url = "http://af3e316b728cc4b8ba63ae04c4222b07-281507278.us-east-1.elb.amazonaws.com:9090/api/v1/query\?query='DCGM_FI_DEV_GPU_TEMP{namespace=\"monitoring\"}'";
+  const char *prom_url = "http://af3e316b728cc4b8ba63ae04c4222b07-281507278.us-east-1.elb.amazonaws.com:9090/api/v1/query\?query=DCGM_FI_DEV_GPU_TEMP{namespace='monitoring'}";
   CURL *curl;
   curl = curl_easy_init();
 
