@@ -268,8 +268,9 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 void
 DynamicBatchScheduler::NewPayload()
 {
+  const auto& instances = model_->Instances();
   curr_payload_ = model_->Server()->GetRateLimiter()->GetPayload(
-      Payload::Operation::INFER_RUN, model_instance_);
+      Payload::Operation::INFER_RUN, instances[0].get());
   payload_saturated_ = false;
 }
 
