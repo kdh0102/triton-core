@@ -340,6 +340,7 @@ DynamicBatchScheduler::MonitoringThread() {
   while (!scheduler_thread_exit_.load()) {
     curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+    LOG_WARNING << *(httpData.get());
     
     if (httpCode != 200)
       break;
