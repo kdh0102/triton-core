@@ -38,6 +38,7 @@
 #include "triton/common/nvtx.h"
 
 #include <curl/curl.h>
+#include <jsoncpp/json/json.h>
 
 namespace triton { namespace core {
 
@@ -282,6 +283,17 @@ DynamicBatchScheduler::NewPayload()
   payload_saturated_ = false;
 }
 
+std::size_t callback(
+        const char* in,
+        std::size_t size,
+        std::size_t num,
+        std::string* out)
+{
+    const std::size_t totalBytes(size * num);
+    out->append(in, totalBytes);
+    return totalBytes;
+}
+
 void
 DynamicBatchScheduler::MonitoringThread() {
   int num_instances = model_->Instances().size();
@@ -293,12 +305,61 @@ DynamicBatchScheduler::MonitoringThread() {
   CURL *curl;
   curl = curl_easy_init();
 
-  if (curl) {
-    curl_easy_setopt(curl, CURLOPT_URL, prom_url);
+  if (!curl) {
+    return;
   }
+  curl_easy_setopt(curl, CURLOPT_URL, prom_url);
+
+  // Don't bother trying IPv6, which would increase DNS resolution time.
+  curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+
+  // Don't wait forever, time out after 10 seconds.
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
+
+
+  // Hook up data handling function.
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
+
+  // Response information.
+  long httpCode(0);
+  std::unique_ptr<std::string> httpData(new std::string());
+
+  // Hook up data container (will be passed as the last parameter to the
+  // callback handling function).  Can be any pointer type, since it will
+  // internally be passed as a void pointer.
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, httpData.get());
 
   while (!scheduler_thread_exit_.load()) {
     curl_easy_perform(curl);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+    
+    if (httpCode != 200)
+      break;
+
+        Json::Value jsonData;
+    Json::Reader jsonReader;
+
+
+    if (jsonReader.parse(*httpData, jsonData))
+    {
+      int idx = 0;
+      for (auto& result : jsonData["data"]["result"]) {
+        const std::string temperature(result["value"][1].asString());
+        gpu_temperatures_[idx] = std::stoi(temperature);
+        idx++;
+      }
+
+      for (auto& temperature : gpu_temperatures_) {
+        LOG_WARNING << "temperature: " << temperature;
+      }
+        LOG_WARNING << "\n\nWaiting for the next..\n";
+    }
+    else
+    {
+        LOG_ERROR << "Could not parse HTTP data as JSON";
+        break;
+    } 
+
     std::this_thread::sleep_for(std::chrono::seconds(5));
   }
   curl_easy_cleanup(curl);

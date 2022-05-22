@@ -438,6 +438,7 @@ if (NOT WIN32)
       dl
       numa
       -lcurl
+      -ljsoncpp
   )
 endif()
 
