@@ -278,8 +278,16 @@ void
 DynamicBatchScheduler::NewPayload()
 {
   const auto& instances = model_->Instances();
+  int gpu = 0;
+  int temp = 1000;
+  for (long unsigned int i = 0; i < gpu_temperatures_.size(); ++i) {
+    if (gpu_temperatures_[i] < temp) {
+      temp = gpu_temperatures_[i];
+      gpu = i;
+    }
+  }
   curr_payload_ = model_->Server()->GetRateLimiter()->GetPayload(
-      Payload::Operation::INFER_RUN, instances[0].get());
+      Payload::Operation::INFER_RUN, instances[gpu].get());
   payload_saturated_ = false;
 }
 
@@ -301,7 +309,7 @@ DynamicBatchScheduler::MonitoringThread() {
     gpu_temperatures_.emplace_back(0);
   }
 
-  const char *prom_url = "http://a475883d76bbd401691c57110b8b9cb7-523026043.us-east-1.elb.amazonaws.com:9090/api/v1/query\?query=DCGM_FI_DEV_GPU_TEMP";
+  const char *prom_url = "http://af3e316b728cc4b8ba63ae04c4222b07-281507278.us-east-1.elb.amazonaws.com:9090/api/v1/query\?query='DCGM_FI_DEV_GPU_TEMP{namespace=\"monitoring\"}'";
   CURL *curl;
   curl = curl_easy_init();
 
@@ -336,7 +344,7 @@ DynamicBatchScheduler::MonitoringThread() {
     if (httpCode != 200)
       break;
 
-        Json::Value jsonData;
+    Json::Value jsonData;
     Json::Reader jsonReader;
 
 
@@ -360,6 +368,7 @@ DynamicBatchScheduler::MonitoringThread() {
         break;
     } 
 
+    *httpData.get() = "";
     std::this_thread::sleep_for(std::chrono::seconds(5));
   }
   curl_easy_cleanup(curl);
