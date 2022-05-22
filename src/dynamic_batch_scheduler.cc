@@ -37,6 +37,8 @@
 #include "triton/common/model_config.h"
 #include "triton/common/nvtx.h"
 
+#include <curl/curl.h>
+
 namespace triton { namespace core {
 
 bool
@@ -145,6 +147,9 @@ DynamicBatchScheduler::Create(
         std::thread([dyna_sched, nice]() { dyna_sched->BatcherThread(nice); });
   }
 
+  sched->monitoring_thread_ =
+      std::thread([dyna_sched]() {dyna_sched->MonitoringThread();});
+
   scheduler->reset(sched.release());
 
   return Status::Success;
@@ -157,6 +162,9 @@ DynamicBatchScheduler::~DynamicBatchScheduler()
   cv_.notify_one();
   if (scheduler_thread_.joinable()) {
     scheduler_thread_.join();
+  }
+  if (monitoring_thread_.joinable()) {
+    monitoring_thread_.join();
   }
 }
 
@@ -272,6 +280,28 @@ DynamicBatchScheduler::NewPayload()
   curr_payload_ = model_->Server()->GetRateLimiter()->GetPayload(
       Payload::Operation::INFER_RUN, instances[0].get());
   payload_saturated_ = false;
+}
+
+void
+DynamicBatchScheduler::MonitoringThread() {
+  int num_instances = model_->Instances().size();
+  for (int i = 0; i < num_instances; ++i) {
+    gpu_temperatures_.emplace_back(0);
+  }
+
+  const char *prom_url = "http://a475883d76bbd401691c57110b8b9cb7-523026043.us-east-1.elb.amazonaws.com:9090/api/v1/query\?query=DCGM_FI_DEV_GPU_TEMP";
+  CURL *curl;
+  curl = curl_easy_init();
+
+  if (curl) {
+    curl_easy_setopt(curl, CURLOPT_URL, prom_url);
+  }
+
+  while (!scheduler_thread_exit_.load()) {
+    curl_easy_perform(curl);
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
+  curl_easy_cleanup(curl);
 }
 
 void

@@ -102,6 +102,7 @@ class DynamicBatchScheduler : public Scheduler {
       const ModelQueuePolicyMap& queue_policy_map);
 
   void BatcherThread(const int nice);
+  void MonitoringThread();
   void NewPayload();
   uint64_t GetDynamicBatch();
   void DelegateResponse(std::unique_ptr<InferenceRequest>& request);
@@ -124,6 +125,10 @@ class DynamicBatchScheduler : public Scheduler {
 
   std::thread scheduler_thread_;
   std::atomic<bool> scheduler_thread_exit_;
+
+  // Monitoring
+  std::thread monitoring_thread_;
+  std::vector<int> gpu_temperatures_;
 
   // Mutex and condvar for signaling scheduler thread
   std::mutex mu_;

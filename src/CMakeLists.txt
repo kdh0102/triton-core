@@ -437,6 +437,7 @@ if (NOT WIN32)
     PRIVATE
       dl
       numa
+      -lcurl
   )
 endif()
 
